@@ -50,13 +50,9 @@ public:
     ~MainWindow();
 
 private slots:
-    void on_actionExit_triggered();
-
-    void on_actionOptions_triggered();
-
-    void on_actionRestart_triggered();
-
     void onCalculatorTimerUpdate();
+    void on_btnRestart_clicked();
+    void on_btnSettings_clicked();
 
 private:
 
@@ -65,7 +61,6 @@ private:
     void onNewConnection(int startIdx, int endIdx);
 
     void updatePlayerLabel(const QString& message);
-    bool isPlayerMoveValid(int playerIdx, int startIdx, int endIdx);
 
     Ui::MainWindow *ui;
 

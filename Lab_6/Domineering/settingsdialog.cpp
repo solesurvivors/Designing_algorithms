@@ -7,6 +7,11 @@ SettingsDialog::SettingsDialog(QWidget *parent, const AppSettings& settings)
     , mSettings(settings)
 {
     ui->setupUi(this);
+
+    ui->cbPlaygroundSize->addItem("5");
+    ui->cbPlaygroundSize->addItem("6");
+    ui->cbPlaygroundSize->addItem("7");
+    ui->cbPlaygroundSize->addItem("8");
 }
 
 SettingsDialog::~SettingsDialog()
@@ -33,6 +38,7 @@ void SettingsDialog::setVisible(bool visible)
     gameModeBtn->setChecked(true);
 
     ui->cbHumanTurnsFirst->setChecked(mSettings.getHumanTurnsFirst());
+    ui->cbPlaygroundSize->setCurrentText(QString::number(mSettings.getPlaygroundSize()));
 
     QDialog::setVisible(visible);
 }
@@ -64,6 +70,11 @@ void SettingsDialog::accept()
     mSettings.setGameMode(gameMode);
 
     mSettings.setHumanTurnsFirst(ui->cbHumanTurnsFirst->isChecked());
+
+    const int playgroundSize = ui->cbPlaygroundSize->currentText().toInt();
+    if ((playgroundSize > 0) && (playgroundSize < 100)) {
+        mSettings.setPlaygroundSize(playgroundSize);
+    }
 
     QDialog::accept();
 }

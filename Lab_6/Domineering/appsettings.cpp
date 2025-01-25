@@ -18,11 +18,6 @@ AppSettings::AppSettings()
     };
 }
 
-int AppSettings::getMaxPlayersCount() const
-{
-    return cfg::MaxPlayersCount;
-}
-
 void AppSettings::setPlaygroundSize(int size)
 {
     mPlaygroundSize = size;
@@ -31,11 +26,6 @@ void AppSettings::setPlaygroundSize(int size)
 int AppSettings::getPlaygroundSize() const
 {
     return mPlaygroundSize;
-}
-
-void AppSettings::setPlayersCount(int playersCount)
-{
-    mPlayersCount = std::min(playersCount, cfg::MaxPlayersCount);
 }
 
 int AppSettings::getPlayersCount() const

@@ -1,27 +1,17 @@
-#ifndef CPLAYGROUNDCALCULATOR_H
-#define CPLAYGROUNDCALCULATOR_H
+#ifndef CPLAYGROUNDCALCULATOR_ALPHABETA_H
+#define CPLAYGROUNDCALCULATOR_ALPHABETA_H
 
-#include "cplayground.h"
+#include "IPlaygroundCalculator.h"
 
-class IPlaygroundCalculator
+#include <memory>
+#include <optional>
+
+class CPlaygroundCalculator_AlphaBeta : public IPlaygroundCalculator
 {
 public:
-    virtual ~IPlaygroundCalculator() = default;
+    CPlaygroundCalculator_AlphaBeta(int playerId, std::shared_ptr<CPlayground> playground, int maxMoves, int maxSolutions);
 
-    virtual CPlayground::tMoveCandidate makeMove() = 0;
-    virtual void opponentMoves(const CPlayground::tMoveCandidate& move) = 0;
-
-    virtual int getNodesProcessed() const = 0;
-};
-
-
-class CPlaygroundCalculator_MinMax : public IPlaygroundCalculator
-{
-public:
-
-    CPlaygroundCalculator_MinMax(int playerId, std::shared_ptr<CPlayground> playground, int maxMoves, int maxSolutions);
-
-    int getNodesProcessed() const override;
+    std::vector<int> getNodesProcessed() const override;
 
 private:
 
@@ -42,12 +32,20 @@ private:
 
         /// @brief state of the playground
         SState mState;
+        /// @brief min-max value of a node
+        std::optional<int> mMinMax;
+        /// @brief alpha-beta value of a node
+        std::pair<int, int> mAB;
 
+        /// @brief estimation of a board after one single move to make a prioritized queue
+        /// of a nodes to calculate
         int mEstimation = 0;
 
         struct SMove
         {
+            /// @brief last move which leads to this state (performed by previous player)
             CPlayground::tMoveCandidate mMove;
+            /// @brief node with new state of the playground after [mMove]
             std::shared_ptr<SNode>      mNode;
         };
 
@@ -55,7 +53,7 @@ private:
         std::vector<SMove> mMoves;
     };
 
-    void calculateMinMaxTreeRecursive(SNode& node);
+    void calculateMinMaxTreeRecursive(SNode& node, std::pair<int,int> alphaBetaValue);
     void createMinMaxTree();
     void updateMinMaxTree(SNode& node);
 
@@ -72,7 +70,7 @@ private:
     /// @brief current position in the tree after all moves performed
     std::shared_ptr<SNode> mCurrentMove;
 
-    int mNodesCreated;
+    std::vector<int> mNodesCreated;
 };
 
-#endif // CPLAYGROUNDCALCULATOR_H
+#endif // CPLAYGROUNDCALCULATOR_ALPHABETA_H

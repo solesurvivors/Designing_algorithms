@@ -1,38 +1,36 @@
-#include "cplaygroundcalculator.h"
+#include "cplaygroundcalculator_est.h"
+#include "CRandValue.h"
 
 #include <cassert>
 
-CPlaygroundCalculator_MinMax::CPlaygroundCalculator_MinMax(int playerId, std::shared_ptr<CPlayground> playground, int maxMoves, int maxSolutions)
+CPlaygroundCalculator_Estimation::CPlaygroundCalculator_Estimation(int playerId, std::shared_ptr<CPlayground> playground, int maxMoves, int maxSolutions)
     : mPlayerIdx(playerId)
     , mPlayground(playground)
     , mMaxMoves(maxMoves)
     , mMaxSolutions(maxSolutions)
     , mRoot(nullptr)
 {
+    mNodesCreated.resize(100, 0);
 }
 
-int CPlaygroundCalculator_MinMax::getNodesProcessed() const
+std::vector<int> CPlaygroundCalculator_Estimation::getNodesProcessed() const
 {
     return mNodesCreated;
 }
 
 namespace {
-int removeMoves(std::vector<CPlayground::tMoveCandidate>& moves, int idxFrom, int idxTo)
+void removeMoves(std::vector<CPlayground::tMoveCandidate>& moves, const CPlayground::tMoveCandidate& move)
 {
-    int result = 0;
-    auto it = std::remove_if(moves.begin(), moves.end(), [idxFrom, idxTo](const CPlayground::tMoveCandidate& item){
-        return (item.first == idxFrom) || (item.second == idxFrom) || (item.first == idxTo) || (item.second == idxTo);
+    auto it = std::remove_if(moves.begin(), moves.end(), [move](const CPlayground::tMoveCandidate& item){
+        return (item.first == move.first) || (item.second == move.first) || (item.first == move.second) || (item.second == move.second);
     });
-    result = std::distance(it, moves.end());
     moves.erase(it, moves.end());
-
-    return result;
 }
 }
 
-void CPlaygroundCalculator_MinMax::calculateMinMaxTreeRecursive(SNode& node)
+void CPlaygroundCalculator_Estimation::calculateMinMaxTreeRecursive(SNode& node)
 {
-    mNodesCreated++;
+    mNodesCreated[node.mLevel]++;
 
     if ((node.mLevel - mCurrentMove->mLevel) >= mMaxMoves) {
         return;
@@ -40,7 +38,7 @@ void CPlaygroundCalculator_MinMax::calculateMinMaxTreeRecursive(SNode& node)
 
     const bool hasMoves = !node.mState.mPlayersMoves[node.mPlayerIdx].empty();
     if (hasMoves) {
-        const int nextPlayerIdx = node.mPlayerIdx+1 == mPlayground->getPlayersCount() ? 0 : node.mPlayerIdx+1;
+        const int nextPlayerIdx = mPlayground->getNextPlayerId(node.mPlayerIdx);
         // game is not finished yet
         auto& playerMoves = node.mState.mPlayersMoves[node.mPlayerIdx];
         for (auto& moveCandidate : playerMoves) {
@@ -49,49 +47,55 @@ void CPlaygroundCalculator_MinMax::calculateMinMaxTreeRecursive(SNode& node)
             nodeCandidate->mPlayerIdx  = nextPlayerIdx;
             nodeCandidate->mLevel      = node.mLevel + 1;
             nodeCandidate->mState      = node.mState;
-            nodeCandidate->mEstimation = 0;
 
-            for (int i=0; i < nodeCandidate->mState.mPlayersMoves.size(); ++i) {
-                removeMoves(nodeCandidate->mState.mPlayersMoves[i], moveCandidate.first, moveCandidate.second);
+            // perform the move, update playground state
+            for (auto& moves: nodeCandidate->mState.mPlayersMoves) {
+                removeMoves(moves, moveCandidate);
             }
-
+            // estimate the new state
             for (int i=0; i < nodeCandidate->mState.mPlayersMoves.size(); ++i) {
                 auto& moves = nodeCandidate->mState.mPlayersMoves[i];
                 nodeCandidate->mEstimation += (i == node.mPlayerIdx) ? moves.size() : -moves.size();
             }
-
+            // add to the list of potential moves
             node.mMoves.push_back({moveCandidate, std::move(nodeCandidate)});
         }
 
         std::sort(node.mMoves.begin(), node.mMoves.end(), [](const SNode::SMove& l, const SNode::SMove& r) {
             return (l.mNode->mEstimation > r.mNode->mEstimation);
         });
-        // calculate child nodes for best estimation
+
+        // calculate child nodes with best estimation
         const int maxEstimation = node.mMoves[0].mNode->mEstimation;
         for (int i=0; i<std::min(size_t(mMaxSolutions), node.mMoves.size()); ++i) {
             auto& move = node.mMoves[i];
             if (move.mNode->mEstimation < maxEstimation)
-                break; // dont need to calculate moves with low level estimation
+                break; // dont need to get deeper for moves with low level estimation
             calculateMinMaxTreeRecursive(*move.mNode);
         }
+
+        // 1. sort child node list again?
+        // 2. what if the node with new max estimation is not calculated yet?
+
+        // update current node estimation based on subtrees are built
     }
 }
 
-void CPlaygroundCalculator_MinMax::createMinMaxTree()
+void CPlaygroundCalculator_Estimation::createMinMaxTree()
 {
     mRoot = std::make_shared<SNode>();
     mRoot->mPlayerIdx  = mPlayerIdx;
     mRoot->mEstimation = 0;
 
     for (int playerIdx = 0; playerIdx < mPlayground->getPlayersCount(); ++playerIdx) {
-        mRoot->mState.mPlayersMoves.push_back(mPlayground->getPlayerMoves(mPlayground->getPlayerDirection(playerIdx)));
+        mRoot->mState.mPlayersMoves.push_back(mPlayground->getAvailableMoves(playerIdx));
     }
 
     mCurrentMove = mRoot;
     calculateMinMaxTreeRecursive(*mRoot);
 }
 
-void CPlaygroundCalculator_MinMax::updateMinMaxTree(SNode& node)
+void CPlaygroundCalculator_Estimation::updateMinMaxTree(SNode& node)
 {
     if (node.mMoves.empty()) {
         calculateMinMaxTreeRecursive(node);
@@ -103,10 +107,8 @@ void CPlaygroundCalculator_MinMax::updateMinMaxTree(SNode& node)
     }
 }
 
-CPlayground::tMoveCandidate CPlaygroundCalculator_MinMax::makeMove()
+CPlayground::tMoveCandidate CPlaygroundCalculator_Estimation::makeMove()
 {
-    mNodesCreated = 1;
-
     if (mRoot == nullptr) {
         createMinMaxTree();
     }
@@ -138,7 +140,7 @@ CPlayground::tMoveCandidate CPlaygroundCalculator_MinMax::makeMove()
     return {};
 }
 
-void CPlaygroundCalculator_MinMax::opponentMoves(const CPlayground::tMoveCandidate& move)
+void CPlaygroundCalculator_Estimation::opponentMoves(const CPlayground::tMoveCandidate& move)
 {
     if (mCurrentMove) {
         auto it = std::find_if(mCurrentMove->mMoves.begin(), mCurrentMove->mMoves.end(), [&move](const SNode::SMove& item){

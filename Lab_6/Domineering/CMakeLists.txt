@@ -27,9 +27,11 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         appsettings.h appsettings.cpp
         cplayground.h cplayground.cpp
         cplaygroundglwidget.h cplaygroundglwidget.cpp
-        CAdjancencyMatrix.h
+
         CRandValue.h
-        cplaygroundcalculator.h cplaygroundcalculator.cpp
+
+        IPlaygroundCalculator.h
+        cplaygroundcalculator_alphabeta.h cplaygroundcalculator_alphabeta.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET Domineering APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR

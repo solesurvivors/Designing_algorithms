@@ -7,9 +7,9 @@ class AppSettings
 {
 public:
     enum EComplexity {
-        Easy,
-        Normal,
-        Expert
+        Easy   = 0,
+        Normal = 1,
+        Expert = 2
     };
 
     enum EGameMode {
@@ -20,12 +20,9 @@ public:
 
     AppSettings();
 
-    int getMaxPlayersCount() const;
-
     void setPlaygroundSize(int size);
     int getPlaygroundSize() const;
 
-    void setPlayersCount(int playersCount);
     int getPlayersCount() const;
 
     void setComplexity(EComplexity level);

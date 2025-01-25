@@ -42,7 +42,22 @@ void CPlaygroundGLWidget::setPlayground(std::shared_ptr<CPlayground> playground,
     mAppSettings = settings;
     mPlayerIdx   = currentPlayer;
 
-    mNodes.clear();
+    if (mPlayground && (mNodes.size() != (mPlayground->getSize()*mPlayground->getSize())))
+    {
+        mNodes.resize(0);
+
+        const int tableCells = mPlayground->getSize();
+        const auto widgetSize = this->size();
+        const int hDelta = widgetSize.width()/(tableCells);
+        const int vDelta = widgetSize.height()/(tableCells);
+        if (mNodes.empty()) {
+            for(int y = vDelta/2; y < widgetSize.height(); y += vDelta) {
+                for(int x = hDelta/2; x < widgetSize.width(); x += hDelta) {
+                    mNodes.push_back(SNode{QRect(x-cfg::dotSize/2, y-cfg::dotSize/2, cfg::dotSize, cfg::dotSize)});
+                }
+            }
+        }
+    }
 
     repaint();
 }
@@ -58,20 +73,6 @@ void CPlaygroundGLWidget::paintEvent(QPaintEvent *event)
 
     painter.fillRect(rect(), mBackground);
     painter.setRenderHint(QPainter::Antialiasing);
-
-    const int tableCells = mPlayground->getSize();
-    const auto widgetSize = this->size();
-
-    const int hDelta = widgetSize.width()/(tableCells);
-    const int vDelta = widgetSize.height()/(tableCells);
-
-    if (mNodes.empty()) {
-        for(int y = vDelta/2; y < widgetSize.height(); y += vDelta) {
-            for(int x = hDelta/2; x < widgetSize.width(); x += hDelta) {
-                mNodes.push_back(SNode{QRect(x-cfg::dotSize/2, y-cfg::dotSize/2, cfg::dotSize, cfg::dotSize)});
-            }
-        }
-    }
 
     painter.setBrush(mCircleBrushHl);
     painter.setPen(mCirclePenHl);
@@ -89,33 +90,29 @@ void CPlaygroundGLWidget::paintEvent(QPaintEvent *event)
         painter.drawEllipse(rect);
     }
 
-    // edges
-    auto graph = mPlayground->getConnections();
-    for (int i = 0; i < graph.size(); ++i) {
-        for (int j = 0; j < i; ++j) {
-            const auto& edge = graph.mData[i][j];
-            if (edge.mDistance != graph.mNoConnectionValue) {
+    // already performed moves
+    for (int i=0; i<mPlayground->getPlayersCount(); ++i) {
+        const auto& moves = mPlayground->getMoves(i);
+        QColor colorPlayer = mAppSettings->getPlayerColor(i);
+        QBrush lineBrush = QBrush(colorPlayer);
+        QPen   linePen   = QPen(colorPlayer);
+        linePen.setWidth(5);
 
-                QColor colorPlayer = mAppSettings->getPlayerColor(edge.mDistance);
-                QBrush lineBrush = QBrush(colorPlayer);
-                QPen   linePen   = QPen(colorPlayer);
-                linePen.setWidth(5);
-
-                painter.setBrush(lineBrush);
-                painter.setPen(linePen);
-
-                painter.drawLine(mNodes[i].screenRect.center(), mNodes[j].screenRect.center());
-            }
+        painter.setBrush(lineBrush);
+        painter.setPen(linePen);
+        for (auto& move: moves) {
+            painter.drawLine(mNodes[move.first].screenRect.center(), mNodes[move.second].screenRect.center());
         }
     }
 
-    // regular nodes
+    // regular nodes (drawn on top of 2 highlighted nodes and lines for already performed moves)
     painter.setBrush(mCircleBrush);
     painter.setPen(mCirclePen);
     for (auto& node: mNodes) {
         painter.drawEllipse(node.screenRect);
     }
 
+    // draw the line for potential move of a player
     if ((mHighlightedNodeStart < mNodes.size()) && (mHighlightedNodeEnd < mNodes.size())) {
         QColor colorPlayer = mAppSettings->getPlayerColor(mPlayerIdx);
         QBrush lineBrush = QBrush(colorPlayer);
@@ -151,18 +148,8 @@ std::tuple<int, int> findMoveRect(const QPoint& pos, const std::vector<CPlaygrou
 void CPlaygroundGLWidget::mouseMoveEvent(QMouseEvent *event)
 {
     if (mPlayground && event) {
-        const auto  dir = mPlayground->getPlayerDirection(mPlayerIdx);
-        if (dir == CPlayground::NotSet) {
-            const auto& playerMoves = mPlayground->getPlayerMoves(CPlayground::Horizontal);
-            std::tie(mHighlightedNodeStart, mHighlightedNodeEnd) = findMoveRect(event->pos(), playerMoves, mNodes);
-            if (mHighlightedNodeStart >= mNodes.size() ) { // not found
-                const auto& playerMoves = mPlayground->getPlayerMoves(CPlayground::Vertical);
-                std::tie(mHighlightedNodeStart, mHighlightedNodeEnd) = findMoveRect(event->pos(), playerMoves, mNodes);
-            }
-        } else {
-            const auto& playerMoves = mPlayground->getPlayerMoves(dir);
-            std::tie(mHighlightedNodeStart, mHighlightedNodeEnd) = findMoveRect(event->pos(), playerMoves, mNodes);
-        }
+        const auto playerMoves = mPlayground->getAvailableMoves(mPlayerIdx);
+        std::tie(mHighlightedNodeStart, mHighlightedNodeEnd) = findMoveRect(event->pos(), playerMoves, mNodes);
 
         repaint();
     }
@@ -170,13 +157,16 @@ void CPlaygroundGLWidget::mouseMoveEvent(QMouseEvent *event)
 
 void CPlaygroundGLWidget::mouseReleaseEvent(QMouseEvent *event)
 {
-    if (mReceiver && event) {
+    if (mPlayground && mReceiver && event) {
         const int vFrom = mHighlightedNodeStart;
         const int vTo   = mHighlightedNodeEnd;
 
         mHighlightedNodeStart = mNodes.size();
         mHighlightedNodeEnd   = mNodes.size();
 
-        QCoreApplication::sendEvent(mReceiver, new CMyTurnEvent(vFrom, vTo));
+        // send event only if move is valid.
+        if (mPlayground->isMoveValid(mPlayerIdx, {vFrom, vTo})) {
+            QCoreApplication::sendEvent(mReceiver, new CMyTurnEvent(vFrom, vTo));
+        }
     }
 }
